@@ -1,0 +1,13 @@
+# requirements.txt
+
+python-dotenv
+numpy
+pandas
+torch
+matplotlib
+seaborn
+transformers
+datasets[audio]
+accelerate
+pyannote.audio
+pydub
