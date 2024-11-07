@@ -1,2 +1,5 @@
 *.csv
 .env
+*.mp3
+*.wav
+*.txt
