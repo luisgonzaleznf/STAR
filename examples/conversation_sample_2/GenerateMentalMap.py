@@ -316,9 +316,9 @@ class SpeakerDiarizationTranscription:
         print("Transcription completed.")
 
         # Assign speakers to transcription
-        print("Assigning speakers to transcription...")
+        print("Mapping speakers to transcription...")
         combined_result = self.assign_speakers_to_transcription(diarization_list, transcription)
-        print("Speaker assignment completed.")
+        print("Speaker mapping completed.")
 
         # Clean up the temporary wav file if it was created
         if wav_file != audio_file:
@@ -367,8 +367,8 @@ with open(parameters_file, 'r') as file:
             language = line.split('=')[1].strip().strip('"')
 
 # Print the variables to confirm
-print("Number of speakers:", num_speakers)
-print("Language:", language)
+#print("Number of speakers:", num_speakers)
+#print("Language:", language)
 
 # Directory where audio files are stored
 audio_folder = 'audio'
@@ -377,7 +377,7 @@ audio_folder = 'audio'
 audio_files = [os.path.join(audio_folder, file) for file in os.listdir(audio_folder) if file.endswith(('.mp3', '.wav'))]
 audio_file = audio_files[0]
 
-print(audio_file)
+#print(audio_file)
 
 # Get duration in seconds
 duration_in_seconds = len(AudioSegment.from_file(audio_file)) / 1000
@@ -388,7 +388,7 @@ minutes, seconds = divmod(remainder, 60)
 
 # Format as HH:MM:SS h
 formatted_duration = f"{int(hours):02}:{int(minutes):02}:{int(seconds):02} h"
-print(f"Duration: {formatted_duration}")
+#print(f"Duration: {formatted_duration}")
 
 
 
@@ -436,6 +436,8 @@ if last_speaker is not None:
         'timestamp': current_timestamp
     })
 
+print("Here is a transcription snippet:\n")
+
 # Display the merged result
 for entry in merged_result[:6]:
     print(f"{entry['speaker']}: {entry['text']}")
@@ -445,7 +447,7 @@ for entry in merged_result[:6]:
 ### GIVE OPTION TO NAME SPEAKERS ###
 
 # Ask the user if they want to name the speakers
-user_input = input("Based on this transcription chunk, would you like to give a name to the speakers? (Y/N): ")
+user_input = input(f"Based on this transcription chunk, would you like to name the {num_speakers} speakers? (Y/N): ")
 name_speakers = user_input.strip().upper() == "Y"
 
 # If the user wants to name the speakers, ask for each speaker's name
@@ -574,12 +576,48 @@ for idx, chunk in enumerate(chunks, 1):
     
     with open(file_path, 'w') as f:
         f.write(chunk)
-    print(f"Saved {file_name} at {file_path}")
+    
+print("All chunks successfully saved.")
 
 
 
 
 ### GENERATE SUMMARY WITH GROK ###
+import sys
+sys.path.append('/mnt/c/Users/luisg/Desktop/STAR/STAR/scripts')
+
+# Now you can import grok as if it's in the same directory
+import grok
+    
+print("Generating summary with Grok.")
+
+# Example usage
+client = grok.initialize_grok_api()
+
+# Get transcription
+try:
+    with open(transcription_path, 'r', encoding='utf-8') as file:
+        transcription = file.read()
+    transcription  # Displaying content to verify successful read
+except FileNotFoundError:
+    transcription = "File not found. Please check the file path and try again."
+    print("Transcription file not found. Please check the file path and try again.")
+    sys.exit(1)  # Exit the script with an error code if parameters files are missing
+
+summary = grok.generate_summary(client, transcription, formatted_duration, num_speakers, language)
+
+if summary:
+    # Define the full path for the output file
+    summary_path = f"transcription/{filename}_summary.txt"
+
+    # Write the message content to the specified file
+    with open(summary_path, "w") as file:
+        file.write(summary)
+
+    print(f"Summary saved to {summary_path}")
+else:
+    print("Error generating summary with Grok.")
+    sys.exit(1)  # Exit the script with an error code if parameters files are missing
 
 
 
