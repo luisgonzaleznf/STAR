@@ -608,7 +608,7 @@ summary = grok.generate_summary(client, transcription, formatted_duration, num_s
 
 if summary:
     # Define the full path for the output file
-    summary_path = f"transcription/{filename}_summary.txt"
+    summary_path = f"chunks/summary.txt"
 
     # Write the message content to the specified file
     with open(summary_path, "w") as file:
@@ -623,6 +623,52 @@ else:
 
 
 ### VECTORIZE SUMMARY AND CHUNKS AND STORE VECTORS ###
+    
+print("Generating vectors.")
 
+import torch
+from transformers import AutoModel, AutoTokenizer
 
+model_name = "BAAI/bge-base-en-v1.5"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModel.from_pretrained(model_name)
 
+# Check if a GPU is available and move model to GPU if possible
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
+
+import os
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer  # Assuming you want to use TF-IDF
+import pandas as pd
+
+# Define output directory for chunks
+chunks_dir = "chunks"
+vectors_dir = "vectors"
+
+# Function to process each text file and convert to embeddings
+def process_text_files(chunks_dir, vectors_dir):
+    # Iterate through each file in the chunks directory
+    for file_name in os.listdir(chunks_dir):
+        if file_name.endswith(".txt"):
+            # Read file content
+            file_path = os.path.join(chunks_dir, file_name)
+            with open(file_path, "r", encoding="utf-8") as f:
+                text = f.read()
+
+            # Tokenize and get embeddings, move inputs to the same device as the model
+            inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True).to(device)
+            with torch.no_grad():
+                outputs = model(**inputs)
+                embeddings = outputs.last_hidden_state.mean(dim=1).squeeze().cpu().numpy()
+
+            # Save embeddings to individual numpy files
+            npy_file_path = os.path.join(vectors_dir, f"{os.path.splitext(file_name)[0]}.npy")
+            np.save(npy_file_path, embeddings)
+
+# Run the function
+process_text_files(chunks_dir, vectors_dir)
+    
+print("Vectors generated.")
+    
+print("The tool is ready! VideoQ&A.py to ask information about this video using Grok.")
