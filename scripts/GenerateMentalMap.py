@@ -383,7 +383,7 @@ formatted_duration = f"{int(hours):02}:{int(minutes):02}:{int(seconds):02} h"
 # Process the audio file
 combined_result = sdt.process_audio(audio_file, num_speakers, language)
 
-print(combined_result)
+# print(combined_result)
 
 def merge_speaker_segments(combined_result):
     """
@@ -448,8 +448,15 @@ def format_transcript(transcript):
     formatted_text = ""
     for entry in transcript:
         start, end = entry['timestamp']
-        formatted_text += f"[{start:.1f} - {end:.1f}] {entry['text']}\n"
+        
+        # Replace None with 'formatted_duration'
+        start = start if start is not None else "0.0"
+        end = end if end is not None else "End"
+
+        formatted_text += f"[{start} - {end}] {entry['text']}\n"
+    
     return formatted_text.strip()
+
 
 def process_combined_result(combined_result, num_speakers):
     """
@@ -465,12 +472,13 @@ def process_combined_result(combined_result, num_speakers):
         return merged_result
     else:
         print("Single speaker detected, no need to merge segments.")
+        print(combined_result)
         return format_transcript(combined_result)
 
 # Example usage:
 merged_result = process_combined_result(combined_result, num_speakers)  # Ensure 'combined_result' and 'num_speakers' are defined appropriately
 
-print(merged_result)
+# print(merged_result)
 
 ### GIVE OPTION TO NAME SPEAKERS ###
 

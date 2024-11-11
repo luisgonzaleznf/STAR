@@ -280,51 +280,36 @@ class SpeakerDiarizationTranscription:
 
         return assigned_transcription
 
-
-    def get_diarization_and_transcription(self, audio_file, num_speakers, language):
-        # Convert to wav if necessary
-        wav_file = self.convert_to_wav(audio_file)
-
-        # Perform diarization
-        print("Starting speaker diarization...")
-        diarization_list = self.perform_diarization(wav_file, num_speakers)
-        print("Speaker diarization completed.")
-
-        # Transcribe audio
-        print("Starting transcription...")
-        transcription = self.transcribe_audio(wav_file, language)
-        print("Transcription completed.")
-
-        # Clean up the temporary wav file if it was created
-        if wav_file != audio_file:
-            os.remove(wav_file)
-
-        return diarization_list, transcription
-
     def process_audio(self, audio_file, num_speakers, language):
         # Convert to wav if necessary
         wav_file = self.convert_to_wav(audio_file)
 
-        # Perform diarization
-        print("Starting speaker diarization...")
-        diarization_list = self.perform_diarization(wav_file, num_speakers)
-        print("Speaker diarization completed.")
+        if num_speakers > 1:
+
+            # Perform diarization
+            print("Starting speaker diarization...")
+            diarization_list = self.perform_diarization(wav_file, num_speakers)
+            print("Speaker diarization completed.")
 
         # Transcribe audio
         print("Starting transcription...")
         transcription = self.transcribe_audio(wav_file, language)
         print("Transcription completed.")
 
-        # Assign speakers to transcription
-        print("Mapping speakers to transcription...")
-        combined_result = self.assign_speakers_to_transcription(diarization_list, transcription)
-        print("Speaker mapping completed.")
+        if num_speakers > 1:
+
+            # Assign speakers to transcription
+            print("Mapping speakers to transcription...")
+            combined_result = self.assign_speakers_to_transcription(diarization_list, transcription)
+            print("Speaker mapping completed.")
 
         # Clean up the temporary wav file if it was created
         if wav_file != audio_file:
             os.remove(wav_file)
 
-        return combined_result
+        if num_speakers > 1:
+            return combined_result
+        return transcription
     
 
 
@@ -398,91 +383,143 @@ formatted_duration = f"{int(hours):02}:{int(minutes):02}:{int(seconds):02} h"
 # Process the audio file
 combined_result = sdt.process_audio(audio_file, num_speakers, language)
 
-# Initialize an empty list to store the merged result
-merged_result = []
+# print(combined_result)
 
-# Keep track of the last speaker to detect changes
-last_speaker = None
-current_text = ""
-current_timestamp = None
+def merge_speaker_segments(combined_result):
+    """
+    Merges segments of text from the same speaker into a single entry.
 
-for chunk in combined_result:
-    speaker = chunk['main_speaker']
-    text = chunk['text']
-    timestamp = chunk['timestamp']
+    Parameters:
+    combined_result (list): List of dictionaries with speaker segments, each containing 'main_speaker', 'text', and 'timestamp'.
 
-    # If this speaker is the same as the last one, concatenate the text
-    if speaker == last_speaker:
-        current_text += " " + text  # Add space between concatenated text segments
-    else:
-        # If a new speaker starts, save the previous speaker's concatenated text
-        if last_speaker is not None:
-            merged_result.append({
-                'speaker': last_speaker,
-                'text': current_text,
-                'timestamp': current_timestamp
-            })
+    Returns:
+    list: Merged list of speaker segments.
+    """
+    merged_result = []
+    last_speaker = None
+    current_text = ""
+    current_timestamp = None
+
+    for chunk in combined_result:
+        speaker = chunk['main_speaker']
+        text = chunk['text']
+        timestamp = chunk['timestamp']
+
+        # If this speaker is the same as the last one, concatenate the text
+        if speaker == last_speaker:
+            current_text += " " + text  # Add space between concatenated text segments
+        else:
+            # If a new speaker starts, save the previous speaker's concatenated text
+            if last_speaker is not None:
+                merged_result.append({
+                    'speaker': last_speaker,
+                    'text': current_text,
+                    'timestamp': current_timestamp
+                })
+            
+            # Start a new text segment for the current speaker
+            last_speaker = speaker
+            current_text = text
+            current_timestamp = timestamp  # Capture timestamp of the first chunk for this speaker
+
+    # Append the final speaker's text
+    if last_speaker is not None:
+        merged_result.append({
+            'speaker': last_speaker,
+            'text': current_text,
+            'timestamp': current_timestamp
+        })
+
+    return merged_result
+
+def display_transcription_snippet(merged_result, num_entries=6):
+    """
+    Displays a snippet of the merged transcription.
+
+    Parameters:
+    merged_result (list): Merged list of speaker segments.
+    num_entries (int): Number of entries to display. Default is 6.
+    """
+    print("Here is a transcription snippet:\n")
+    for entry in merged_result[:num_entries]:
+        print(f"{entry['speaker']}: {entry['text']}")
+
+def format_transcript(transcript):
+    formatted_text = ""
+    for entry in transcript:
+        start, end = entry['timestamp']
         
-        # Start a new text segment for the current speaker
-        last_speaker = speaker
-        current_text = text
-        current_timestamp = timestamp  # Capture timestamp of the first chunk for this speaker
+        # Replace None with 'formatted_duration'
+        start = start if start is not None else "0.0"
+        end = end if end is not None else "End"
 
-# Append the final speaker's text
-if last_speaker is not None:
-    merged_result.append({
-        'speaker': last_speaker,
-        'text': current_text,
-        'timestamp': current_timestamp
-    })
-
-print("Here is a transcription snippet:\n")
-
-# Display the merged result
-for entry in merged_result[:6]:
-    print(f"{entry['speaker']}: {entry['text']}")
+        formatted_text += f"[{start} - {end}] {entry['text']}\n"
+    
+    return formatted_text.strip()
 
 
+def process_combined_result(combined_result, num_speakers):
+    """
+    Processes the combined result only if there are multiple speakers.
+
+    Parameters:
+    combined_result (list): List of dictionaries with speaker segments.
+    num_speakers (int): Number of distinct speakers.
+    """
+    if num_speakers > 1:
+        merged_result = merge_speaker_segments(combined_result)
+        display_transcription_snippet(merged_result)
+        return merged_result
+    else:
+        print("Single speaker detected, no need to merge segments.")
+        print(combined_result)
+        return format_transcript(combined_result)
+
+# Example usage:
+merged_result = process_combined_result(combined_result, num_speakers)  # Ensure 'combined_result' and 'num_speakers' are defined appropriately
+
+# print(merged_result)
 
 ### GIVE OPTION TO NAME SPEAKERS ###
 
-# Ask the user if they want to name the speakers
-user_input = input(f"Based on this transcription chunk, would you like to name the {num_speakers} speakers? (Y/N): ")
-name_speakers = user_input.strip().upper() == "Y"
+if num_speakers > 1:
+    # Ask the user if they want to name the speakers
+    user_input = input(f"Based on this transcription chunk, would you like to name the {num_speakers} speakers? (Y/N): ")
+    name_speakers = user_input.strip().upper() == "Y"
 
-# If the user wants to name the speakers, ask for each speaker's name
-speaker_names = []
-if name_speakers:
-    # Assume num_speakers is defined somewhere earlier in your code
-    for i in range(num_speakers):
-        speaker_name = input(f"Name for SPEAKER_{i:02}: ")
-        speaker_names.append(speaker_name.strip().upper())
-else:
-    speaker_names = None
+    # If the user wants to name the speakers, ask for each speaker's name
+    speaker_names = []
+    if name_speakers:
+        # Assume num_speakers is defined somewhere earlier in your code
+        for i in range(num_speakers):
+            speaker_name = input(f"Name for SPEAKER_{i:02}: ")
+            speaker_names.append(speaker_name.strip().upper())
+    else:
+        speaker_names = None
 
 
 
-### REPLACE SPEAKER NAMES IF NECESSARY ###
+    ### REPLACE SPEAKER NAMES IF NECESSARY ###
 
-def replace_speaker_names(merged_result, speaker_names=None):
+    def replace_speaker_names(merged_result, speaker_names=None):
 
-    if speaker_names == None:
+        if speaker_names == None:
+            return merged_result
+        # Create a dictionary to map SPEAKER_XX to provided names
+        speaker_map = {f"SPEAKER_{str(i).zfill(2)}": name for i, name in enumerate(speaker_names)}
+        
+        # Replace speaker names in merged_result
+        for entry in merged_result:
+            if entry['speaker'] in speaker_map:
+                entry['speaker'] = speaker_map[entry['speaker']]
+        
         return merged_result
-    # Create a dictionary to map SPEAKER_XX to provided names
-    speaker_map = {f"SPEAKER_{str(i).zfill(2)}": name for i, name in enumerate(speaker_names)}
-    
-    # Replace speaker names in merged_result
-    for entry in merged_result:
-        if entry['speaker'] in speaker_map:
-            entry['speaker'] = speaker_map[entry['speaker']]
-    
-    return merged_result
 
-# Example usage:
-# Assuming merged_result is the result from the code you shared
+    # Example usage:
+    # Assuming merged_result is the result from the code you shared
 
-# Call the function
-updated_result = replace_speaker_names(merged_result, speaker_names)
+    # Call the function
+    merged_result = replace_speaker_names(merged_result, speaker_names)
 
 
 
@@ -496,14 +533,18 @@ transcription_path = f"transcription/{filename}.txt"
 
 # Write the merged result to the file
 with open(transcription_path, "w", encoding="utf-8") as file:
-    for entry in merged_result:
-        # Format the timestamp into start and end time with a clearer structure
-        start_time, end_time = entry['timestamp']
-        start_time_formatted = f"{int(start_time // 60)}:{int(start_time % 60):02}.{int((start_time % 1) * 100):02}"
-        end_time_formatted = f"{int(end_time // 60)}:{int(end_time % 60):02}.{int((end_time % 1) * 100):02}"
-        
+    if num_speakers > 1:
+        for entry in merged_result:
+            # Format the timestamp into start and end time with a clearer structure
+            start_time, end_time = entry['timestamp']
+            start_time_formatted = f"{int(start_time // 60)}:{int(start_time % 60):02}.{int((start_time % 1) * 100):02}"
+            end_time_formatted = f"{int(end_time // 60)}:{int(end_time % 60):02}.{int((end_time % 1) * 100):02}"
+            
+            # Storing the speaker, timestamp, and text in a more readable way
+            file.write(f"{entry['speaker']} ({start_time_formatted} - {end_time_formatted}): {entry['text']}\n")
+    else:
         # Storing the speaker, timestamp, and text in a more readable way
-        file.write(f"{entry['speaker']} ({start_time_formatted} - {end_time_formatted}): {entry['text']}\n")
+        file.write(merged_result)
 
 print("Transcription saved succesfully.")
 
