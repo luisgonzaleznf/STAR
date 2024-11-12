@@ -51,9 +51,6 @@ Ensure you have the following installed:
    pip install -r requirements.txt
    ```
 4. **Set up environment variables (see [Configuration](#configuration) for details):**
-   ```bash
-   export API_KEY="your_api_key_here"
-   ```
 5. **Store an audio file and a parameters.txt file in the folder**
 5. **Run the main scripts in order:**
    ```bash
